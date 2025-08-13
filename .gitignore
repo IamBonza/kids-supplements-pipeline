@@ -15,3 +15,9 @@ kids_supplements.csv
 
 # Logs
 *.log
+# Google Drive credentials
+service-account-key.json
+google_credentials.json
+
+# Backup data
+*_backup.csv
