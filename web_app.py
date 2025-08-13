@@ -167,22 +167,36 @@ def api_start():
 
 @app.route('/download')
 def download():
-    results_file = Path('kids_supplements.csv')
-    if results_file.exists():
-        return send_file(str(results_file), as_attachment=True, 
-                        download_name=f'kids_supplements_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
+    # Проверяем persistent disk сначала, потом рабочую папку
+    persistent_file = Path('/opt/render/project/src/data/kids_supplements.csv')
+    working_file = Path('kids_supplements.csv')
+    
+    if persistent_file.exists():
+        results_file = persistent_file
+    elif working_file.exists():
+        results_file = working_file
     else:
         return "Файл результатов не найден", 404
+    
+    return send_file(str(results_file), as_attachment=True, 
+                    download_name=f'kids_supplements_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
 
 @app.route('/api/stats')
 def api_stats():
-    stats_file = Path('pipeline_stats.json')
-    if stats_file.exists():
-        with open(stats_file, 'r') as f:
-            stats = json.load(f)
-        return jsonify(stats)
+    # Проверяем persistent disk сначала, потом рабочую папку
+    persistent_stats = Path('/opt/render/project/src/data/pipeline_stats.json')
+    working_stats = Path('pipeline_stats.json')
+    
+    if persistent_stats.exists():
+        stats_file = persistent_stats
+    elif working_stats.exists():
+        stats_file = working_stats
     else:
         return jsonify({'error': 'Статистика не найдена'})
+    
+    with open(stats_file, 'r') as f:
+        stats = json.load(f)
+    return jsonify(stats)
 
 def run_pipeline(keyword_limit, detail_limit):
     global pipeline_status
@@ -204,14 +218,19 @@ def run_pipeline(keyword_limit, detail_limit):
         pipeline_status['progress'] = 10
         pipeline_status['message'] = 'Запуск pipeline...'
         
-        # Формируем команду
+        # Создаем папку data если её нет
+        data_dir = Path('/opt/render/project/src/data')
+        data_dir.mkdir(exist_ok=True)
+        
+        # Формируем команду с сохранением на persistent disk
+        output_file = str(data_dir / 'kids_supplements.csv')
         cmd = [
             'python3', 'pipeline_openai_complete.py',
             '--rainforest-key', rainforest_key,
             '--openai-key', openai_key,
             '--keyword-limit', str(keyword_limit),
             '--detail-limit', str(detail_limit),
-            '--output-file', 'kids_supplements.csv'
+            '--output-file', output_file
         ]
         
         pipeline_status['progress'] = 20
@@ -235,14 +254,15 @@ def run_pipeline(keyword_limit, detail_limit):
             pipeline_status['last_run'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             pipeline_status['results_file'] = 'kids_supplements.csv'
             
-            # Сохраняем статистику
+            # Сохраняем статистику на persistent disk
             stats = {
                 'last_run': pipeline_status['last_run'],
                 'keyword_limit': keyword_limit,
                 'detail_limit': detail_limit,
                 'success': True
             }
-            with open('pipeline_stats.json', 'w') as f:
+            stats_file = data_dir / 'pipeline_stats.json'
+            with open(stats_file, 'w') as f:
                 json.dump(stats, f)
         else:
             pipeline_status['message'] = f'Ошибка выполнения: {stderr[:200]}'
