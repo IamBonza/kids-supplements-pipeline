@@ -8,11 +8,10 @@ __pycache__/
 *.py[cod]
 venv/
 
-# Data files
-*.csv
-*.json
+# Data files (except keywords)
 output/
 cache/
+kids_supplements.csv
 
 # Logs
 *.log
