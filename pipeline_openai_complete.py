@@ -618,19 +618,33 @@ class FullPipelineProcessor:
 
 def main():
     parser = argparse.ArgumentParser(description='Полный pipeline с OpenAI Vision API')
-    parser.add_argument('--rainforest-key', required=True, help='Rainforest API ключ')
-    parser.add_argument('--openai-key', required=True, help='OpenAI API ключ')
+    parser.add_argument('--rainforest-key', help='Rainforest API ключ (или используется RAINFOREST_API_KEY из env)')
+    parser.add_argument('--openai-key', help='OpenAI API ключ (или используется OPENAI_API_KEY из env)')
     parser.add_argument('--keywords-file', default='Kids Supplements Keywords.csv', help='Файл с ключевыми запросами')
-    parser.add_argument('--output-file', default='kids_supplements_openai_filled.csv', help='Выходной файл')
+    parser.add_argument('--output-file', default='kids_supplements.csv', help='Выходной файл')
     parser.add_argument('--max-pages', type=int, default=2, help='Максимум страниц поиска')
     parser.add_argument('--detail-limit', type=int, default=3, help='Количество товаров для детальной обработки')
     
     args = parser.parse_args()
     
+    # Получаем API ключи из аргументов или environment variables
+    rainforest_key = args.rainforest_key or os.environ.get('RAINFOREST_API_KEY')
+    openai_key = args.openai_key or os.environ.get('OPENAI_API_KEY')
+    
+    if not rainforest_key:
+        print("❌ Ошибка: Rainforest API ключ не найден")
+        print("💡 Укажите --rainforest-key или установите RAINFOREST_API_KEY")
+        return
+    
+    if not openai_key:
+        print("❌ Ошибка: OpenAI API ключ не найден")
+        print("💡 Укажите --openai-key или установите OPENAI_API_KEY")
+        return
+    
     print("🚀 ЗАПУСК ПОЛНОГО PIPELINE С OPENAI VISION")
     print("=" * 60)
     
-    processor = FullPipelineProcessor(args.rainforest_key, args.openai_key)
+    processor = FullPipelineProcessor(rainforest_key, openai_key)
     
     try:
         # Загружаем ключевые запросы

@@ -167,36 +167,22 @@ def api_start():
 
 @app.route('/download')
 def download():
-    # Проверяем persistent disk сначала, потом рабочую папку
-    persistent_file = Path('/opt/render/project/src/data/kids_supplements.csv')
-    working_file = Path('kids_supplements.csv')
-    
-    if persistent_file.exists():
-        results_file = persistent_file
-    elif working_file.exists():
-        results_file = working_file
+    results_file = Path('kids_supplements.csv')
+    if results_file.exists():
+        return send_file(str(results_file), as_attachment=True, 
+                        download_name=f'kids_supplements_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
     else:
         return "Файл результатов не найден", 404
-    
-    return send_file(str(results_file), as_attachment=True, 
-                    download_name=f'kids_supplements_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
 
 @app.route('/api/stats')
 def api_stats():
-    # Проверяем persistent disk сначала, потом рабочую папку
-    persistent_stats = Path('/opt/render/project/src/data/pipeline_stats.json')
-    working_stats = Path('pipeline_stats.json')
-    
-    if persistent_stats.exists():
-        stats_file = persistent_stats
-    elif working_stats.exists():
-        stats_file = working_stats
+    stats_file = Path('pipeline_stats.json')
+    if stats_file.exists():
+        with open(stats_file, 'r') as f:
+            stats = json.load(f)
+        return jsonify(stats)
     else:
         return jsonify({'error': 'Статистика не найдена'})
-    
-    with open(stats_file, 'r') as f:
-        stats = json.load(f)
-    return jsonify(stats)
 
 def run_pipeline(keyword_limit, detail_limit):
     global pipeline_status
@@ -218,26 +204,20 @@ def run_pipeline(keyword_limit, detail_limit):
         pipeline_status['progress'] = 10
         pipeline_status['message'] = 'Запуск pipeline...'
         
-        # Создаем папку data если её нет
-        data_dir = Path('/opt/render/project/src/data')
-        data_dir.mkdir(exist_ok=True)
-        
-        # Формируем команду с сохранением на persistent disk
-        output_file = str(data_dir / 'kids_supplements.csv')
+        # Формируем команду (API ключи передаются через environment variables)
         cmd = [
             'python3', 'pipeline_openai_complete.py',
-            '--rainforest-key', rainforest_key,
-            '--openai-key', openai_key,
-            '--keyword-limit', str(keyword_limit),
-            '--detail-limit', str(detail_limit),
-            '--output-file', output_file
+            '--keywords-file', 'Kids Supplements Keywords.csv',
+            '--output-file', output_file,
+            '--max-pages', '2',
+            '--detail-limit', str(detail_limit)
         ]
         
         pipeline_status['progress'] = 20
         pipeline_status['message'] = 'Обработка данных...'
         
-        # Запускаем pipeline
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        # Запускаем pipeline с передачей environment variables
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=os.environ)
         
         # Симуляция прогресса (в реальности можно парсить вывод pipeline)
         for i in range(20, 90, 10):
@@ -254,15 +234,14 @@ def run_pipeline(keyword_limit, detail_limit):
             pipeline_status['last_run'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             pipeline_status['results_file'] = 'kids_supplements.csv'
             
-            # Сохраняем статистику на persistent disk
+            # Сохраняем статистику
             stats = {
                 'last_run': pipeline_status['last_run'],
                 'keyword_limit': keyword_limit,
                 'detail_limit': detail_limit,
                 'success': True
             }
-            stats_file = data_dir / 'pipeline_stats.json'
-            with open(stats_file, 'w') as f:
+            with open('pipeline_stats.json', 'w') as f:
                 json.dump(stats, f)
         else:
             pipeline_status['message'] = f'Ошибка выполнения: {stderr[:200]}'
